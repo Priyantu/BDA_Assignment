@@ -1,0 +1,7 @@
+.venv/
+.pytest_cache/
+.qodo/
+__pycache__/
+*.py[cod]
+.coverage
+.ipynb_checkpoints/

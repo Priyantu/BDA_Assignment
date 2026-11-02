@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EpiScope | Disease Surveillance</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    :root {
+      --navy: #10233f;
+      --blue: #2463c7;
+      --ink: #14284b;
+      --muted: #71809a;
+      --line: #dce5f2;
+      --paper: #fff;
+      --canvas: #f2f5fa;
+      --green: #2ca66f;
+      --orange: #f59e0b;
+      --red: #e94b54;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: #edf3f8; font: 13px/1.45 Inter, "Segoe UI", Arial, sans-serif; }
+    .main { background: linear-gradient(180deg, #f4f7fa 0%, #edf3f8 100%); }
+    button, select { font: inherit; }
+    .app { min-height: 100vh; }
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; z-index: 2; display: flex; width: clamp(150px, 16.5vw, 190px); flex-direction: column;
+      padding: 10px 7px; color: #dbe7fa; background: linear-gradient(180deg, #10233f, #0b1a31);
+    }
+    .brand { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 3px 8px; border-bottom: 1px solid #ffffff1c; }
+    .brand-mark { display: grid; width: 30px; height: 30px; place-items: center; border: 2px solid #4a93ff; border-radius: 8px; color: #7bb2ff; font-weight: 800; }
+    .brand strong { display: block; color: #fff; font-size: 17px; letter-spacing: -.4px; }
+    .brand small { display: block; color: #9fb2d0; font-size: 8px; }
+    .nav { display: grid; gap: 3px; margin-top: 12px; }
+    .nav button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 5px; padding: 7px 8px; color: #c3d0e4; background: transparent; text-align: left; cursor: pointer; }
+    .nav button:hover, .nav button.active { color: white; background: linear-gradient(90deg, rgba(65,127,217,.95), rgba(42,98,191,.95)); }
+    .nav .icon { width: 17px; color: #b9c9e1; font-size: 14px; text-align: center; }
+    .system { margin-top: auto; border: 1px solid #ffffff18; border-radius: 8px; padding: 10px 9px; color: #b6c6de; font-size: 10px; }
+    .system .online { color: #70dba5; }
+    .main { margin-left: clamp(150px, 16.5vw, 190px); padding: 0 8px 8px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; min-height: 56px; border-bottom: 1px solid #e1e8f2; background: #fff; margin: 0 -8px 8px; padding: 5px 10px; }
+    .heading h1 { margin: 0; color: #17335e; font-size: 18px; line-height: 1.2; }
+    .heading p { margin: 3px 0 0; color: #647693; font-size: 10px; }
+    .controls { display: flex; align-items: end; gap: 7px; }
+    .control label { display: block; margin: 0 0 3px; color: #65748d; font-size: 9px; }
+    .control select { width: 96px; border: 1px solid #d4deec; border-radius: 4px; padding: 5px 6px; color: #203656; background: #fff; font-size: 9px; }
+    .profile { display: flex; align-items: center; gap: 8px; margin-left: 8px; padding-left: 14px; border-left: 1px solid var(--line); white-space: nowrap; }
+    .avatar { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; color: #31517e; background: #e8eff9; font-size: 15px; }
+    .profile strong { display: block; font-size: 10px; }
+    .profile small { display: block; color: var(--muted); font-size: 9px; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.07fr) minmax(0, 1.21fr) minmax(0, .91fr); gap: 8px; }
+    .panel { min-width: 0; border: 1px solid #e0e7f1; border-radius: 6px; padding: 7px 8px; background: var(--paper); box-shadow: 0 2px 6px rgba(14, 31, 58, 0.05); }
+    .panel-head { display: flex; min-height: 19px; align-items: center; justify-content: space-between; gap: 5px; margin-bottom: 4px; }
+    .panel h2 { overflow: hidden; margin: 0; color: #183761; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .panel-head select { max-width: 120px; border: 1px solid #dce4ef; border-radius: 4px; padding: 4px 6px; color: #3c5272; background: #fff; font-size: 9px; }
+    .subtle { color: var(--muted); font-size: 9px; }
+    .map-stage { position: relative; height: 252px; overflow: hidden; border-radius: 5px; background: linear-gradient(180deg, #f7fbff 0%, #eff5fb 100%); }
+    #map { width: 100%; height: 100%; }
+    .map-scale { position: absolute; top: 20px; right: 4px; display: grid; gap: 5px; border: 1px solid #dce5ef; border-radius: 4px; padding: 6px 5px; color: #536780; background: #ffffffed; font-size: 7px; }
+    .map-scale span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .map-scale i { width: 9px; height: 9px; }
+    .map-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 7px; font-size: 9px; color: #5c6e89; }
+    .legend-dot { display: inline-block; width: 8px; height: 8px; margin-right: 3px; border: 1px solid #ffffff; border-radius: 50%; vertical-align: -1px; }
+    .map-note { position: absolute; bottom: 6px; left: 7px; color: #7386a1; font-size: 7px; }
+    .map-controls { position: absolute; bottom: 8px; left: 6px; display: grid; overflow: hidden; border: 1px solid #d6e0ed; border-radius: 4px; background: #fff; }
+    .map-controls button { width: 20px; height: 20px; border: 0; color: #234365; background: #fff; font-size: 15px; line-height: 1; cursor: pointer; }
+    .map-controls button + button { border-top: 1px solid #e1e8f2; }
+    .map-selection { position: absolute; right: 5px; bottom: 7px; width: 92px; border: 1px solid #d9e3ef; border-radius: 4px; padding: 5px; color: #38506e; background: #ffffffed; font-size: 7px; }
+    .map-selection strong { display: block; color: #1d385d; font-size: 8px; }
+    .trend-chart { width: 100%; height: 176px; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 7px; color: #63748e; font-size: 7px; }
+    .legend-line { display: inline-block; width: 15px; margin-right: 4px; border-top: 2px solid #2463c7; vertical-align: 3px; }
+    .legend-line.forecast { border-color: #2ca66f; border-top-style: dashed; }
+    .legend-line.threshold { border-color: #f05a5a; border-top-style: dashed; }
+    .trend-foot { display: grid; grid-template-columns: 1.5fr 1fr; gap: 6px; margin-top: 4px; }
+    .trend-foot h3 { margin: 0 0 2px; color: #29476d; font-size: 7px; }
+    .forecast-table, .performance-table { width: 100%; border-collapse: collapse; font-size: 7px; text-align: center; }
+    .forecast-table th, .forecast-table td, .performance-table th, .performance-table td { border: 1px solid #e1e8f2; padding: 2px 1px; }
+    .forecast-table th { color: #556986; background: #f7f9fc; font-weight: 600; }
+    .alert-panel { background: linear-gradient(145deg, #fff, #fffdfd); }
+    .alert-table, .allocation-table, .calendar-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    .alert-table th, .alert-table td, .allocation-table th, .allocation-table td { padding: 5px 4px; border-bottom: 1px solid #e8edf4; text-align: left; }
+    .alert-table th, .allocation-table th { color: #687a95; background: #f8fafd; font-weight: 600; }
+    .alert-table td { color: #243957; }
+    .alert-table td:first-child { color: var(--red); font-weight: 700; }
+    .badge { display: inline-block; min-width: 43px; border-radius: 12px; padding: 3px 7px; color: #fff; background: var(--red); text-align: center; font-size: 8px; font-weight: 700; }
+    .badge.medium { background: #ef852b; }
+    .badge.watch { color: #664900; background: #ffda55; }
+    .insights { margin-top: 8px; border: 1px solid #d9e7f7; border-radius: 6px; padding: 7px; background: #f3f8ff; }
+    .insights h3 { margin: 0 0 5px; color: #284d80; font-size: 10px; }
+    .insights ul { margin: 0; padding-left: 14px; color: #385578; font-size: 9px; }
+    .insights li { margin: 3px 0; }
+    .second-row { display: grid; grid-template-columns: 1fr 1.2fr 1.24fr; gap: 8px; margin-top: 8px; }
+    .heatmap-wrap { overflow: auto; }
+    #heatmap { display: block; width: 100%; height: 132px; }
+    .heat-legend { margin: 3px auto 0; width: 72%; height: 8px; border-radius: 5px; background: linear-gradient(90deg,#1e88e5,#4fc3f7,#a5d96a,#ffde59,#f04b38); }
+    .heat-scale { display: flex; justify-content: space-between; margin: 2px 9px 0; color: #72829a; font-size: 8px; }
+    .allocation-table th, .allocation-table td { padding: 6px 3px; text-align: right; }
+    .allocation-table th:first-child, .allocation-table td:first-child { text-align: left; }
+    .allocation-table td { color: #314762; }
+    .calendar-table th, .calendar-table td { border: 1px solid #e7edf4; padding: 1px 2px; line-height: 1.1; text-align: center; white-space: nowrap; }
+    .calendar-table th { color: #5e718d; background: #f8fafd; font-size: 6px; }
+    .calendar-table th:first-child, .calendar-table td:first-child { text-align: left; font-weight: 700; }
+    .calendar-table td { color: #35506e; font-size: 6px; }
+    .calendar-table .action-cell { background: #e9f7ed; }
+    .calendar-table .seasonal { background: #fff1ce; }
+    .calendar-table .surveillance { background: #e7f0ff; }
+    .kpis { display: grid; grid-template-columns: repeat(5, 1fr); height: 42px; margin-top: 8px; border: 1px solid #e0e7f1; border-radius: 5px; background: #fff; }
+    .kpi { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 7px; }
+    .kpi + .kpi { border-left: 1px solid #e4eaf3; }
+    .kpi-icon { color: #214d8a; font-size: 15px; }
+    .kpi-label { color: #71809a; font-size: 6px; }
+    .kpi-value { display: block; color: #173b72; font-size: 10px; font-weight: 750; }
+    .footer-note { margin: 8px 3px 0; color: #7c8ba0; font-size: 9px; }
+    .loading { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; padding: 20px; background: #f2f5faeF; text-align: center; }
+    .loading-card { max-width: 430px; border: 1px solid var(--line); border-radius: 10px; padding: 20px; background: white; box-shadow: 0 8px 30px #1c34551c; }
+    .loading-card strong { display: block; margin-bottom: 5px; color: var(--ink); }
+    .loading.error { color: #a52f38; }
+    .tooltip { position: absolute; pointer-events: none; border-radius: 4px; padding: 6px 8px; color: #fff; background: #172a46; font-size: 9px; opacity: 0; }
+    @media (max-width: 1100px) {
+      .dashboard-grid { grid-template-columns: minmax(0, .96fr) minmax(0, 1.18fr) minmax(0, .9fr); }
+      .second-row { grid-template-columns: minmax(210px, 1fr) minmax(270px, 1.25fr) minmax(240px, 1.1fr); }
+      .control select { width: 110px; }
+    }
+    @media (max-width: 900px) {
+      .sidebar { width: 60px; padding-inline: 7px; }
+      .brand { justify-content: center; padding-inline: 0; }
+      .brand > div:last-child, .nav .label, .system { display: none; }
+      .nav button { justify-content: center; padding-inline: 5px; }
+      .nav .icon { font-size: 17px; }
+      .main { margin-left: 60px; }
+      .dashboard-grid { grid-template-columns: minmax(0, .96fr) minmax(0, 1.18fr) minmax(0, .9fr); }
+      .second-row { grid-template-columns: 1fr 1fr; }
+      .second-row .panel:last-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 720px) {
+      .main { padding: 0 9px 12px; }
+      .topbar { align-items: flex-start; flex-direction: column; gap: 9px; margin: 0 -9px 9px; padding: 12px; }
+      .controls { width: 100%; flex-wrap: wrap; }
+      .control select { width: 112px; }
+      .profile { display: none; }
+      .dashboard-grid, .second-row { grid-template-columns: 1fr; }
+      .alerts-panel, .second-row .panel:last-child { grid-column: auto; }
+      .map-panel, .trend-panel { min-height: 0; }
+      .kpis { grid-template-columns: 1fr 1fr; }
+      .kpi:nth-child(3) { border-left: 0; border-top: 1px solid #e4eaf3; }
+      .kpi:nth-child(4) { border-top: 1px solid #e4eaf3; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">✚</div>
+        <div><strong>EpiScope</strong><small>Surveillance · Forecasting · Response</small></div>
+      </div>
+      <nav class="nav" aria-label="Dashboard sections">
+        <button class="active" data-target="top"><span class="icon">⌂</span><span class="label">Dashboard</span></button>
+        <button data-target="map-panel"><span class="icon">◈</span><span class="label">Map View</span></button>
+        <button data-target="trend-panel"><span class="icon">▥</span><span class="label">Forecasting</span></button>
+        <button data-target="allocation-panel"><span class="icon">▦</span><span class="label">Resource Allocation</span></button>
+        <button data-target="calendar-panel"><span class="icon">▣</span><span class="label">Preparedness Calendar</span></button>
+        <button data-target="quality-panel"><span class="icon">⬡</span><span class="label">Data Quality</span></button>
+        <button data-target="controls"><span class="icon">⚙</span><span class="label">Settings</span></button>
+      </nav>
+      <div class="system"><span class="online">● System online</span><br /><span id="updated-at">Loading synthetic data…</span></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar" id="top">
+        <div class="heading">
+          <h1>EpiScope</h1>
+          <p>A Big Data Surveillance, Forecasting and Response-Planning Platform for Bangladesh</p>
+        </div>
+        <div class="controls" id="controls">
+          <div class="control"><label for="disease-select">Select Disease</label><select id="disease-select">
+            <option value="dengue">Dengue</option><option value="diarrhoea">Diarrhoea</option><option value="ili">Influenza-like illness</option><option value="malaria">Malaria</option><option value="all">All tracked diseases</option>
+          </select></div>
+          <div class="control"><label for="range-select">Select Time Range</label><select id="range-select">
+            <option value="12">Last 12 Weeks</option><option value="26">Last 26 Weeks</option><option value="52">Last 52 Weeks</option><option value="all">All Available</option>
+          </select></div>
+          <div class="control"><label for="district-select">Select District</label><select id="district-select"><option value="all" selected>All Districts</option></select></div>
+          <div class="profile"><div class="avatar">♟</div><div><strong>Ministry of Health</strong><small>Decision Maker</small></div></div>
+        </div>
+      </header>
+
+      <div class="dashboard-grid">
+        <section class="panel map-panel" id="map-panel">
+          <div class="panel-head"><h2>1. Bangladesh Disease Map</h2><span class="subtle">Incidence per 100k</span></div>
+          <div class="map-stage"><svg id="map" role="img" aria-label="Bangladesh district incidence choropleth"></svg><div class="map-scale" aria-label="Incidence per 100,000"><span><i style="background:#e34b4b"></i>&gt; 0.5</span><span><i style="background:#f29b38"></i>0.2–0.5</span><span><i style="background:#f3cf43"></i>0.1–0.2</span><span><i style="background:#a8d779"></i>0.05–0.1</span><span><i style="background:#2ca66f"></i>&lt; 0.05</span></div><div class="map-note">District incidence · synthetic data</div></div>
+        </section>
+
+        <section class="panel trend-panel" id="trend-panel">
+          <div class="panel-head"><h2 id="trend-title">2. Cases &amp; Forecast</h2><span class="subtle" id="trend-subtitle"></span></div>
+          <svg class="trend-chart" id="trend-chart" role="img" aria-label="Weekly cases and four-week forecast"></svg>
+          <div class="legend-row"><span><i class="legend-line"></i>Observed cases</span><span><i class="legend-line forecast"></i>Trend projection</span><span><i class="legend-line threshold"></i>Reference threshold</span></div>
+          <table class="forecast-table" id="forecast-table" aria-label="Four-week projected cases"></table>
+        </section>
+
+        <section class="panel alerts-panel alert-panel" id="alerts-panel">
+          <div class="panel-head"><h2>3. Early Warning (Top 5)</h2><span class="subtle" id="alert-range-label">Across diseases · selected range</span></div>
+          <table class="alert-table" id="alert-table"></table>
+          <div class="insights"><h3>✧ Key Insights</h3><ul id="insights-list"></ul></div>
+        </section>
+      </div>
+
+      <div class="second-row">
+        <section class="panel" id="heatmap-panel">
+          <div class="panel-head"><h2>4. Seasonal Heatmap (All Districts)</h2><span class="subtle">Average weekly cases / 100k</span></div>
+          <div class="heatmap-wrap"><svg id="heatmap" role="img" aria-label="Seasonal district heatmap"></svg></div>
+          <div class="heat-legend"></div><div class="heat-scale"><span>Lower activity</span><span>Higher activity</span></div>
+        </section>
+
+        <section class="panel" id="allocation-panel">
+          <div class="panel-head"><h2>5. Resource Allocation</h2><span class="subtle">Next 4 weeks · flat-run-rate estimate</span></div>
+          <div style="overflow:auto"><table class="allocation-table" id="allocation-table"></table></div>
+          <div class="subtle" style="margin-top:6px">Case-weighted estimates only; inventory and optimization are not modeled.</div>
+        </section>
+
+        <section class="panel" id="calendar-panel">
+          <div class="panel-head"><h2>6. Preparedness Calendar</h2><span class="subtle">12-month planning cues</span></div>
+          <div style="overflow:auto"><table class="calendar-table" id="calendar-table"></table></div>
+          <div class="subtle" style="margin-top:6px">Illustrative seasonal actions; validate with local health guidance.</div>
+        </section>
+      </div>
+
+      <section class="kpis" id="quality-panel" aria-label="Dataset summary">
+        <div class="kpi"><span class="kpi-icon">♧</span><div><span class="kpi-label">Districts in reference</span><strong class="kpi-value" id="kpi-districts">—</strong></div></div>
+        <div class="kpi"><span class="kpi-icon">▤</span><div><span class="kpi-label">Unique encounter records</span><strong class="kpi-value" id="kpi-records">—</strong></div></div>
+        <div class="kpi"><span class="kpi-icon">◷</span><div><span class="kpi-label">Facilities in registry</span><strong class="kpi-value" id="kpi-facilities">—</strong></div></div>
+        <div class="kpi"><span class="kpi-icon">⬡</span><div><span class="kpi-label">Quality flags found</span><strong class="kpi-value" id="kpi-quality">—</strong></div></div>
+        <div class="kpi"><span class="kpi-icon">◈</span><div><span class="kpi-label">District boundary polygons</span><strong class="kpi-value" id="kpi-boundaries">—</strong></div></div>
+      </section>
+      <p class="footer-note">Synthetic data prototype. Outbreak ground-truth data is not used for detection or forecasting. Projections and response quantities are illustrative, not clinical guidance.</p>
+    </main>
+  </div>
+  <div class="loading" id="loading"><div class="loading-card"><strong>Loading EpiScope data</strong><span>Reading the local synthetic encounter and district files…</span></div></div>
+
+  <script>
+    const ROOT = "../data/synthetic/";
+    const BOUNDARY_URL = "../data/real/bgd_adm2.geojson";
+    const YEARS = [2021, 2022, 2023, 2024, 2025, 2026];
+    const DISEASE_NAMES = { dengue: "Dengue", diarrhoea: "Diarrhoea", ili: "ILI", malaria: "Malaria", all: "All tracked" };
+    const number = d3.format(",");
+    let records = [];
+    let districts = [];
+    let districtFeatures = [];
+    let facilities = [];
+    let maxDate;
+    let firstWeek;
+    let weeklyByDistrict = new Map();
+    let weeklyByDisease = new Map();
+    let weeklyByDiseaseDistrict = new Map();
+    let weeklyHeatmap = new Map();
+    let availableYears = 1;
+    const DISTRICT_ALIASES = new Map([
+      ["barisal", "barishal"], ["bogra", "bogura"], ["brahamanbaria", "brahmanbaria"],
+      ["chittagong", "chattogram"], ["comilla", "cumilla"], ["jessore", "jashore"],
+      ["jhalokati", "jhalokathi"], ["maulvibazar", "moulvibazar"], ["nawabganj", "chapainawabganj"],
+      ["netrakona", "netrokona"]
+    ]);
+
+    function districtKey(name) {
+      const key = name.toLowerCase().replace(/[^a-z]/g, "");
+      return DISTRICT_ALIASES.get(key) || key;
+    }
+
+    function diseaseForCode(code) {
+      if (/^A9[01]$/.test(code)) return "dengue";
+      if (/^A0[09]$/.test(code)) return "diarrhoea";
+      if (/^J1[01]$/.test(code)) return "ili";
+      if (/^B5[0-4]$/.test(code)) return "malaria";
+      return null;
+    }
+
+    function showError(error) {
+      const overlay = document.querySelector("#loading");
+      overlay.classList.add("error");
+      overlay.innerHTML = `<div class="loading-card"><strong>Could not load dashboard data</strong><span>${error.message}. Start the web server from the project root so the dashboard can read <code>data/synthetic</code>.</span></div>`;
+    }
+
+    async function loadData() {
+      const [districtRows, facilityRows, yearRows, boundaries] = await Promise.all([
+        d3.csv(`${ROOT}district_reference_APPROX.csv`),
+        d3.csv(`${ROOT}facility_registry.csv`),
+        Promise.all(YEARS.map(async (year) => {
+          const response = await fetch(`${ROOT}encounters_${year}.csv`);
+          if (response.status === 404) return [];
+          if (!response.ok) throw new Error(`encounters_${year}.csv returned ${response.status}`);
+          return d3.csvParse(await response.text());
+        })),
+        d3.json(BOUNDARY_URL)
+      ]);
+      districts = districtRows.map(d => ({ ...d, district_id: +d.district_id, centroid_lat: +d.centroid_lat, centroid_lon: +d.centroid_lon, population_est: +d.population_est }));
+      const districtIdsByName = new Map(districts.map(d => [districtKey(d.district), d.district_id]));
+      districtFeatures = boundaries.features.map(feature => ({
+        ...feature,
+        district_id: districtIdsByName.get(districtKey(feature.properties.shapeName)),
+        geometry: {
+          ...feature.geometry,
+          coordinates: feature.geometry.type === "Polygon"
+            ? feature.geometry.coordinates.map(ring => ring.slice().reverse())
+            : feature.geometry.coordinates.map(polygon => polygon.map(ring => ring.slice().reverse()))
+        }
+      })).filter(feature => feature.district_id);
+      facilities = facilityRows;
+      const facilityDistrict = new Map(facilities.map(d => [d.facility_id, +d.district_id]));
+      const seen = new Set();
+      let duplicateCount = 0;
+      records = yearRows.flat().map(d => {
+        const disease = diseaseForCode(d.icd10_code);
+        return {
+          ...d,
+          disease,
+          district_id: facilityDistrict.get(d.facility_id),
+          age_years: +d.age_years,
+          date: new Date(`${d.onset_date}T00:00:00Z`)
+        };
+      });
+      const uniqueRecords = records.filter(d => {
+        if (seen.has(d.encounter_id)) {
+          duplicateCount += 1;
+          return false;
+        }
+        seen.add(d.encounter_id);
+        return true;
+      });
+      const invalidAgeCount = records.filter(d => !Number.isFinite(d.age_years) || d.age_years < 0 || d.age_years > 120).length;
+      const orphanCount = records.filter(d => !d.district_id).length;
+      const qualityFlags = duplicateCount + invalidAgeCount + orphanCount;
+      records = uniqueRecords.filter(d => d.disease && d.district_id && Number.isFinite(+d.date));
+      maxDate = d3.max(records, d => d.date);
+      firstWeek = d3.utcMonday.floor(d3.min(records, d => d.date));
+      const years = new Set();
+      records.forEach(d => {
+        const week = +d3.utcMonday.floor(d.date);
+        years.add(d.date.getUTCFullYear());
+        addCount(weeklyByDistrict, d.district_id, week);
+        addCount(weeklyByDisease, d.disease, week);
+        if (!weeklyByDiseaseDistrict.has(d.disease)) weeklyByDiseaseDistrict.set(d.disease, new Map());
+        addCount(weeklyByDiseaseDistrict.get(d.disease), d.district_id, week);
+        const seasonalWeek = Math.min(51, d3.utcMonday.count(d3.utcMonday.floor(d3.utcYear(d.date)), d.date));
+        const key = `${d.disease}-${seasonalWeek}`;
+        weeklyHeatmap.set(key, (weeklyHeatmap.get(key) || 0) + 1);
+      });
+      availableYears = years.size || 1;
+      records = [];
+      document.querySelector("#kpi-districts").textContent = number(districts.length);
+      document.querySelector("#kpi-records").textContent = number(seen.size);
+      document.querySelector("#kpi-facilities").textContent = number(facilities.length);
+      document.querySelector("#kpi-quality").textContent = `${number(qualityFlags)} · 3 classes`;
+      document.querySelector("#kpi-boundaries").textContent = `${number(districtFeatures.length)} · GeoJSON`;
+      document.querySelector("#updated-at").textContent = `Synthetic data · ${d3.utcFormat("%d %b %Y")(maxDate)}`;
+      document.querySelector("#district-select").insertAdjacentHTML("beforeend", districts.map(d => `<option value="${d.district_id}">${d.district}</option>`).join(""));
+      document.querySelector("#loading").remove();
+      drawHeatmap();
+      render();
+      document.querySelector("#disease-select").addEventListener("change", render);
+      document.querySelector("#range-select").addEventListener("change", render);
+      document.querySelector("#district-select").addEventListener("change", render);
+      document.querySelectorAll(".nav button").forEach(button => button.addEventListener("click", () => {
+        document.querySelectorAll(".nav button").forEach(item => item.classList.remove("active"));
+        button.classList.add("active");
+        document.getElementById(button.dataset.target).scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+    }
+
+    function addCount(index, key, week) {
+      if (!index.has(key)) index.set(key, new Map());
+      const counts = index.get(key);
+      counts.set(week, (counts.get(week) || 0) + 1);
+    }
+
+    function state() {
+      const range = document.querySelector("#range-select").value;
+      const rangeWeeks = range === "all" ? Infinity : +range;
+      const selectedDistrict = document.querySelector("#district-select").value;
+      const disease = document.querySelector("#disease-select").value;
+      const endWeek = d3.utcMonday.floor(maxDate);
+      const startWeek = Number.isFinite(rangeWeeks) ? d3.utcMonday.offset(endWeek, -(rangeWeeks - 1)) : firstWeek;
+      return { disease, selectedDistrict, endWeek, startWeek, rangeWeeks };
+    }
+
+    function weeklyCounts(s) {
+      return d3.utcMonday.range(s.startWeek, d3.utcMonday.offset(s.endWeek, 1))
+        .map(week => {
+          const weekKey = +week;
+          let count = 0;
+          if (s.selectedDistrict === "all" && s.disease === "all") {
+            weeklyByDisease.forEach(counts => { count += counts.get(weekKey) || 0; });
+          } else if (s.selectedDistrict === "all") {
+            count = weeklyByDisease.get(s.disease)?.get(weekKey) || 0;
+          } else if (s.disease === "all") {
+            count = weeklyByDistrict.get(+s.selectedDistrict)?.get(weekKey) || 0;
+          } else {
+            count = weeklyByDiseaseDistrict.get(s.disease)?.get(+s.selectedDistrict)?.get(weekKey) || 0;
+          }
+          return { week, count };
+        });
+    }
+
+    function regressionForecast(series, count = 4) {
+      const recent = series.slice(-8);
+      const meanX = d3.mean(recent, (_, i) => i) || 0;
+      const meanY = d3.mean(recent, d => d.count) || 0;
+      const denominator = d3.sum(recent, (_, i) => (i - meanX) ** 2) || 1;
+      const slope = d3.sum(recent, (d, i) => (i - meanX) * (d.count - meanY)) / denominator;
+      const lastWeek = series.length ? series[series.length - 1].week : d3.utcMonday.floor(maxDate);
+      return d3.range(1, count + 1).map(i => ({
+        week: d3.utcMonday.offset(lastWeek, i),
+        count: Math.max(0, meanY + slope * (recent.length - 1 + i - meanX)),
+        lower: Math.max(0, meanY + slope * (recent.length - 1 + i - meanX) * .8),
+        upper: Math.max(1, meanY + slope * (recent.length - 1 + i - meanX) * 1.2 + Math.sqrt(Math.max(meanY, 1)) * i)
+      }));
+    }
+
+    function render() {
+      const s = state();
+      const series = weeklyCounts(s);
+      const forecast = regressionForecast(series);
+      const name = DISEASE_NAMES[s.disease];
+      document.querySelector("#trend-title").textContent = `2. Cases & Forecast (${name})`;
+      document.querySelector("#trend-subtitle").textContent = s.selectedDistrict === "all" ? "All districts" : districts.find(d => d.district_id === +s.selectedDistrict)?.district;
+      drawTrend(series, forecast, s);
+      const metrics = getDistrictMetrics(s);
+      drawMap(metrics, s);
+      const recentAlerts = getAlerts(metrics);
+      const alerts = getAlerts(getAlertMetrics(s));
+      drawAlerts(alerts, s);
+      drawAllocation(recentAlerts, s);
+      drawCalendar(s.disease);
+    }
+
+    function drawTrend(series, forecast, s) {
+      const svg = d3.select("#trend-chart");
+      svg.selectAll("*").remove();
+      const width = svg.node().clientWidth || 700, height = 250, margin = { top: 14, right: 18, bottom: 34, left: 48 };
+      svg.attr("viewBox", `0 0 ${width} ${height}`);
+      const points = series.slice(-Math.min(series.length, Number.isFinite(s.rangeWeeks) ? s.rangeWeeks : 52));
+      const all = [...points, ...forecast];
+      const x = d3.scaleUtc().domain(d3.extent(all, d => d.week)).range([margin.left, width - margin.right]);
+      const maxCount = d3.max(all, d => d.upper ?? d.count) || 1;
+      const y = d3.scaleLinear().domain([0, maxCount * 1.12]).nice().range([height - margin.bottom, margin.top]);
+      const g = svg.append("g");
+      g.append("g").attr("transform", `translate(0,${height - margin.bottom})`).call(d3.axisBottom(x).ticks(6).tickFormat(d3.utcFormat("%b %y"))).call(axis => axis.selectAll("text").attr("font-size", 9));
+      g.append("g").attr("transform", `translate(${margin.left},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("~s"))).call(axis => axis.selectAll("text").attr("font-size", 9));
+      g.selectAll(".domain").attr("stroke", "#cbd6e5");
+      g.selectAll(".tick line").attr("stroke", "#e9eef5");
+      g.selectAll(".tick line").filter(function() { return this.parentNode.parentNode === g.node(); }).attr("x2", width - margin.left - margin.right);
+      const latestBaseline = d3.mean(points.slice(-8, -1), d => d.count) || d3.mean(points, d => d.count) || 0;
+      const threshold = latestBaseline + 2 * Math.sqrt(Math.max(latestBaseline, 1));
+      g.append("line").attr("x1", margin.left).attr("x2", width - margin.right).attr("y1", y(threshold)).attr("y2", y(threshold)).attr("stroke", "#ef6464").attr("stroke-dasharray", "5 4");
+      if (points.length) {
+        g.append("path").datum(points).attr("fill", "none").attr("stroke", "#2463c7").attr("stroke-width", 2.3).attr("d", d3.line().x(d => x(d.week)).y(d => y(d.count)));
+        g.selectAll(".actual-point").data(points).join("circle").attr("class", "actual-point").attr("cx", d => x(d.week)).attr("cy", d => y(d.count)).attr("r", 2).attr("fill", "#2463c7");
+      }
+      if (forecast.length) {
+        g.append("path").datum(forecast).attr("fill", "#74a7f61c").attr("stroke", "none").attr("d", d3.area().x(d => x(d.week)).y0(d => y(d.lower)).y1(d => y(d.upper)));
+        const projectionPath = points.length ? [points[points.length - 1], ...forecast] : forecast;
+        g.append("path").datum(projectionPath).attr("fill", "none").attr("stroke", "#2ca66f").attr("stroke-width", 2).attr("stroke-dasharray", "5 3").attr("d", d3.line().x(d => x(d.week)).y(d => y(d.count)));
+        const last = points[points.length - 1];
+        if (last) g.append("line").attr("x1", x(last.week)).attr("x2", x(last.week)).attr("y1", margin.top).attr("y2", height - margin.bottom).attr("stroke", "#9aa9bd").attr("stroke-dasharray", "3 4");
+      }
+      document.querySelector("#forecast-table").innerHTML = `<thead><tr><th>Projection</th>${forecast.map((_, i) => `<th>${i + 1} week${i ? "s" : ""}</th>`).join("")}</tr></thead><tbody><tr><th>Estimated cases</th>${forecast.map(d => `<td>${number(Math.round(d.count))}</td>`).join("")}</tr></tbody>`;
+    }
+
+    function getDistrictMetrics(s) {
+      const recentStart = d3.utcMonday.offset(s.endWeek, -3);
+      const priorStart = d3.utcMonday.offset(s.endWeek, -7);
+      const diseases = s.disease === "all" ? [...weeklyByDisease.keys()] : [s.disease];
+      return districts.map(d => {
+        let latest = 0;
+        let previous = 0;
+        for (const disease of diseases) {
+          const weekly = weeklyByDiseaseDistrict.get(disease)?.get(d.district_id);
+          for (let offset = 0; offset < 4; offset += 1) {
+            latest += weekly?.get(+d3.utcMonday.offset(recentStart, offset)) || 0;
+            previous += weekly?.get(+d3.utcMonday.offset(priorStart, offset)) || 0;
+          }
+        }
+        const rate = latest / Math.max(previous, 1);
+        const incidence = latest / Math.max(d.population_est, 1) * 100000;
+        const risk = latest >= 5 && rate >= 1.5 ? "High" : latest >= 3 && rate >= 1.15 ? "Medium" : "Watch";
+        return { ...d, latest, previous, rate, incidence, risk, change: previous ? (latest - previous) / previous : latest ? 1 : 0 };
+      });
+    }
+
+    function getAlertMetrics(s) {
+      const periodWeeks = Math.max(1, d3.utcMonday.count(s.startWeek, d3.utcMonday.offset(s.endWeek, 1)));
+      const priorStart = d3.utcMonday.offset(s.startWeek, -periodWeeks);
+      const hasPriorPeriod = priorStart >= firstWeek;
+      const priorWeeks = hasPriorPeriod ? d3.utcMonday.range(priorStart, s.startWeek) : [];
+      const currentWeeks = d3.utcMonday.range(s.startWeek, d3.utcMonday.offset(s.endWeek, 1));
+      const diseases = s.disease === "all" ? [...weeklyByDisease.keys()] : [s.disease];
+      const selectedDistricts = s.selectedDistrict === "all"
+        ? districts
+        : districts.filter(d => d.district_id === +s.selectedDistrict);
+
+      const candidates = selectedDistricts.flatMap(d => diseases.map(disease => {
+        const weekly = weeklyByDiseaseDistrict.get(disease)?.get(d.district_id);
+        const latest = d3.sum(currentWeeks, week => weekly?.get(+week) || 0);
+        const previous = d3.sum(priorWeeks, week => weekly?.get(+week) || 0);
+        const fourWeekAverage = latest * 4 / periodWeeks;
+        const priorFourWeekAverage = previous * 4 / periodWeeks;
+        const rate = hasPriorPeriod
+          ? priorFourWeekAverage > 0 ? fourWeekAverage / priorFourWeekAverage : fourWeekAverage > 0 ? 2 : 1
+          : 1;
+        const risk = fourWeekAverage >= 40 ? "High" : fourWeekAverage >= 20 || (fourWeekAverage >= 2 && rate >= 2) ? "Medium" : "Watch";
+        return {
+          ...d,
+          latest,
+          previous,
+          disease,
+          rate,
+          score: fourWeekAverage * rate,
+          incidence: fourWeekAverage / Math.max(d.population_est, 1) * 100000,
+          risk,
+          previousPeriodAvailable: hasPriorPeriod,
+        };
+      })).filter(d => d.latest > 0);
+      return candidates;
+    }
+
+    function drawMap(metrics, s) {
+      const svg = d3.select("#map");
+      svg.selectAll("*").remove();
+      const node = svg.node(), width = node.clientWidth || 320, height = node.clientHeight || 290;
+      svg.attr("viewBox", `0 0 ${width} ${height}`);
+      const metricByDistrict = new Map(metrics.map(d => [d.district_id, d]));
+      const featureCollection = { type: "FeatureCollection", features: districtFeatures };
+      const projection = d3.geoMercator().fitExtent([[7, 7], [width - 7, height - 7]], featureCollection);
+      const path = d3.geoPath(projection);
+      const color = d3.scaleThreshold().domain([0.05, 0.1, 0.2, 0.5]).range(["#2ca66f", "#a8d779", "#f3cf43", "#f29b38", "#e34b4b"]);
+      d3.selectAll(".tooltip").remove();
+      const tooltip = d3.select("body").append("div").attr("class", "tooltip");
+      svg.selectAll("path.district").data(districtFeatures).join("path")
+        .attr("class", "district")
+        .attr("d", path)
+        .attr("fill", feature => color(metricByDistrict.get(feature.district_id)?.incidence || 0))
+        .attr("stroke", feature => feature.district_id === +s.selectedDistrict ? "#17345a" : "#fff")
+        .attr("stroke-width", feature => feature.district_id === +s.selectedDistrict ? 1.8 : .8)
+        .on("mouseenter", (event, feature) => {
+          const d = metricByDistrict.get(feature.district_id);
+          tooltip.style("opacity", 1).html(`<strong>${d.district}</strong><br>${number(d.latest)} recent cases<br>${d.incidence.toFixed(1)} per 100k`);
+        })
+        .on("mousemove", event => tooltip.style("left", `${event.pageX + 10}px`).style("top", `${event.pageY + 10}px`))
+        .on("mouseleave", () => tooltip.style("opacity", 0))
+        .on("click", (_, feature) => { document.querySelector("#district-select").value = feature.district_id; render(); });
+      const labels = ["Dhaka", "Chattogram", "Sylhet", "Rajshahi", "Khulna", "Rangpur", "Barishal"];
+      svg.selectAll(".map-label").data(districtFeatures.filter(feature => labels.includes(metricByDistrict.get(feature.district_id)?.district))).join("text")
+        .attr("class", "map-label").attr("x", feature => path.centroid(feature)[0]).attr("y", feature => path.centroid(feature)[1])
+        .attr("text-anchor", "middle").attr("font-size", 8).attr("font-weight", 700).attr("fill", "#293e5c").attr("paint-order", "stroke")
+        .attr("stroke", "#fff").attr("stroke-width", 2.5).text(feature => metricByDistrict.get(feature.district_id).district);
+      tooltip.raise();
+    }
+
+    function getAlerts(metrics) {
+      const ranked = metrics.slice().sort((a, b) => {
+        const scoreA = a.score ?? a.latest * Math.max(1, a.rate);
+        const scoreB = b.score ?? b.latest * Math.max(1, b.rate);
+        return scoreB - scoreA;
+      });
+      if (new Set(ranked.map(candidate => candidate.disease)).size <= 1) return ranked.slice(0, 5);
+      const diseaseCounts = new Map();
+      const selectedDistricts = new Set();
+      const selected = [];
+      for (const candidate of ranked) {
+        if (!candidate.disease || diseaseCounts.has(candidate.disease) || selectedDistricts.has(candidate.district_id)) continue;
+        selected.push(candidate);
+        diseaseCounts.set(candidate.disease, 1);
+        selectedDistricts.add(candidate.district_id);
+      }
+      for (const candidate of ranked) {
+        if (selected.length >= 5) break;
+        const diseaseCount = candidate.disease ? diseaseCounts.get(candidate.disease) || 0 : 0;
+        if (diseaseCount >= 2 || selectedDistricts.has(candidate.district_id)) continue;
+        selected.push(candidate);
+        if (candidate.disease) diseaseCounts.set(candidate.disease, diseaseCount + 1);
+        selectedDistricts.add(candidate.district_id);
+      }
+      selected.sort((a, b) => {
+        const scoreA = a.score ?? a.latest * Math.max(1, a.rate);
+        const scoreB = b.score ?? b.latest * Math.max(1, b.rate);
+        return scoreB - scoreA;
+      });
+      return selected.slice(0, 5);
+    }
+
+    function drawAlerts(alerts, s) {
+      const diseaseName = disease => disease === "ili" ? "Flu" : DISEASE_NAMES[disease];
+      const periodLabel = Number.isFinite(s.rangeWeeks) ? `Last ${s.rangeWeeks} weeks` : "All available weeks";
+      const diseaseLabel = s.disease === "all" ? "All diseases" : DISEASE_NAMES[s.disease];
+      const rangeLabel = `${diseaseLabel} · ${periodLabel}`;
+      document.querySelector("#alert-range-label").textContent = rangeLabel;
+      document.querySelector("#alert-table").innerHTML = `<thead><tr><th>Rank</th><th>District</th><th>Disease</th><th>Alert Level</th></tr></thead><tbody>${alerts.slice(0, 5).map((d, i) => `<tr><td>${i + 1}</td><td>${d.district}</td><td>${diseaseName(d.disease || s.disease)}</td><td><span class="badge ${d.risk === "Medium" ? "medium" : d.risk === "Watch" ? "watch" : ""}">${d.risk}</span></td></tr>`).join("")}</tbody>`;
+      const top = alerts[0];
+      const comparison = top?.previousPeriodAvailable
+        ? `${top.rate.toFixed(1)}× versus the preceding ${periodLabel.toLowerCase()}`
+        : "no equally long earlier period is available for comparison";
+      const insightLines = top ? [
+        `${diseaseName(top.disease || s.disease)} has the strongest signal in ${top.district} (${number(top.latest)} cases over ${periodLabel.toLowerCase()}).`,
+        `${top.district} activity is ${comparison}.`,
+        `Use the forecast and local surveillance review to prioritize response planning.`,
+      ] : ["No recent records are available for this selection.", "Try a wider time range or another disease.", "Forecasts are descriptive projections, not a clinical alert."];
+      document.querySelector("#insights-list").innerHTML = insightLines.map(d => `<li>${d}</li>`).join("");
+    }
+
+    function drawHeatmap() {
+      const svg = d3.select("#heatmap");
+      svg.selectAll("*").remove();
+      const width = 440, height = 205, margin = { top: 20, right: 7, bottom: 5, left: 68 };
+      svg.attr("viewBox", `0 0 ${width} ${height}`);
+      const diseaseRows = ["dengue", "ili", "malaria", "diarrhoea"];
+      const cellWidth = (width - margin.left - margin.right) / 52;
+      const cellHeight = (height - margin.top - margin.bottom) / diseaseRows.length;
+      const population = d3.sum(districts, d => d.population_est);
+      const values = diseaseRows.flatMap(disease => d3.range(52).map(week => (weeklyHeatmap.get(`${disease}-${week}`) || 0) / availableYears / population * 100000));
+      const max = d3.max(values) || 1;
+      const color = d3.scaleSequential().domain([0, max]).interpolator(d3.interpolateRgbBasis(["#2388e5", "#56c5ed", "#a9dd6e", "#ffd44d", "#ed4b3e"]));
+      svg.append("g").selectAll("text").data(d3.range(0, 52, 10)).join("text")
+        .attr("x", d => margin.left + d * cellWidth).attr("y", 12).attr("font-size", 8).attr("fill", "#70809a").text(d => `W${d + 1}`);
+      svg.append("g").selectAll("text").data(diseaseRows).join("text")
+        .attr("x", margin.left - 5).attr("y", (_, i) => margin.top + i * cellHeight + cellHeight * .6)
+        .attr("text-anchor", "end").attr("font-size", 8).attr("fill", "#63748e").text(d => DISEASE_NAMES[d]);
+      const cells = [];
+      diseaseRows.forEach((disease, row) => d3.range(52).forEach(week => {
+        const value = (weeklyHeatmap.get(`${disease}-${week}`) || 0) / availableYears / Math.max(population, 1) * 100000;
+        cells.push({ disease, row, week, value });
+      }));
+      svg.append("g").selectAll("rect").data(cells).join("rect")
+        .attr("x", d => margin.left + d.week * cellWidth).attr("y", d => margin.top + d.row * cellHeight)
+        .attr("width", Math.max(1, cellWidth - .6)).attr("height", Math.max(1, cellHeight - .5)).attr("rx", .4)
+        .attr("fill", d => color(d.value)).append("title").text(d => `${DISEASE_NAMES[d.disease]}, week ${d.week + 1}: ${d.value.toFixed(1)} cases per 100k`);
+    }
+
+    function drawAllocation(alerts, s) {
+      const maxDemand = d3.max(alerts, d => d.latest) || 1;
+      document.querySelector("#allocation-table").innerHTML = `<thead><tr><th>District</th><th>Forecast<br>cases</th><th>Bed<br>need</th><th>${s.disease === "dengue" ? "NS1 kits" : s.disease === "diarrhoea" ? "ORS" : "Response<br>units"}</th><th>Suggested<br>share</th></tr></thead><tbody>${alerts.map(d => {
+        const expected = d.latest;
+        const kits = Math.round(expected * (s.disease === "dengue" ? .35 : s.disease === "diarrhoea" ? 2 : 1));
+        const share = maxDemand ? Math.round(expected / maxDemand * 100) : 0;
+        return `<tr><td>${d.district}</td><td>${number(expected)}</td><td>${number(Math.ceil(expected * .08))}</td><td>${number(kits)}</td><td>${share}%</td></tr>`;
+      }).join("")}</tbody>`;
+    }
+
+    function drawCalendar(disease) {
+      const actions = {
+        dengue: ["Stock + Vector", "Stock + Vector", "Vector Ctrl", "Vector Ctrl", "Vector Ctrl", "Vector Ctrl", "Vector Ctrl", "Vector Ctrl", "Vector Ctrl", "Vector Ctrl", "Stock + Vector", "Stock + Vector"],
+        diarrhoea: ["ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock", "ORS Stock"],
+        ili: ["Surveillance", "Awareness", "Awareness", "Awareness", "Awareness", "Awareness", "Awareness", "Awareness", "Awareness", "Awareness", "Surveillance", "Surveillance"],
+        malaria: ["Surveillance", "Surveillance", "Mosquito Net", "Mosquito Net", "Mosquito Net", "Mosquito Net", "Mosquito Net", "Mosquito Net", "Mosquito Net", "Mosquito Net", "Surveillance", "Surveillance"]
+      };
+      const months = d3.range(12).map(month => d3.utcFormat("%b")(new Date(Date.UTC(2025, month, 1))));
+      const diseaseColumns = ["dengue", "diarrhoea", "ili", "malaria"];
+      const cellClass = action => action.includes("Stock") || action.includes("Vector") || action.includes("Net") ? "seasonal" : action === "Surveillance" ? "surveillance" : "action-cell";
+      document.querySelector("#calendar-table").innerHTML = `<thead><tr><th>Month</th><th>Dengue</th><th>Cholera/Diarrhea</th><th>Influenza</th><th>Malaria</th></tr></thead><tbody>${months.map((month, i) => `<tr><td>${month}</td>${diseaseColumns.map(key => `<td class="${cellClass(actions[key][i])}">${actions[key][i]}</td>`).join("")}</tr>`).join("")}</tbody>`;
+    }
+
+    loadData().catch(showError);
+  </script>
+</body>
+</html>
